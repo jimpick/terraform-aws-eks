@@ -135,20 +135,6 @@ locals {
   })
 }
 
-# Download kubectl
-# https://stackoverflow.com/questions/58232731/kubectl-missing-form-terraform-cloud
-resource "null_resource" "custom" {
-  # change trigger to run every time
-  triggers = {
-    build_number = "${timestamp()}"
-  }
-
-  # download kubectl
-  provisioner "local-exec" {
-    command = "curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl"
-  }
-}
-
 # Separate resource so that this is only ever executed once
 resource "null_resource" "remove_default_coredns_deployment" {
   triggers = {}
@@ -162,7 +148,8 @@ resource "null_resource" "remove_default_coredns_deployment" {
     # We are removing the deployment provided by the EKS service and replacing it through the self-managed CoreDNS Helm addon
     # However, we are maintaing the existing kube-dns service and annotating it for Helm to assume control
     command = <<-EOT
-      kubectl --namespace kube-system delete deployment coredns --kubeconfig <(echo $KUBECONFIG | base64 --decode)
+      curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl
+      ./kubectl --namespace kube-system delete deployment coredns --kubeconfig <(echo $KUBECONFIG | base64 --decode)
     EOT
   }
 }
@@ -179,9 +166,10 @@ resource "null_resource" "modify_kube_dns" {
     # We are maintaing the existing kube-dns service and annotating it for Helm to assume control
     command = <<-EOT
       echo "Setting implicit dependency on ${module.eks.fargate_profiles["kube_system"].fargate_profile_pod_execution_role_arn}"
-      kubectl --namespace kube-system annotate --overwrite service kube-dns meta.helm.sh/release-name=coredns --kubeconfig <(echo $KUBECONFIG | base64 --decode)
-      kubectl --namespace kube-system annotate --overwrite service kube-dns meta.helm.sh/release-namespace=kube-system --kubeconfig <(echo $KUBECONFIG | base64 --decode)
-      kubectl --namespace kube-system label --overwrite service kube-dns app.kubernetes.io/managed-by=Helm --kubeconfig <(echo $KUBECONFIG | base64 --decode)
+      curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl && chmod +x kubectl
+      ./kubectl --namespace kube-system annotate --overwrite service kube-dns meta.helm.sh/release-name=coredns --kubeconfig <(echo $KUBECONFIG | base64 --decode)
+      ./kubectl --namespace kube-system annotate --overwrite service kube-dns meta.helm.sh/release-namespace=kube-system --kubeconfig <(echo $KUBECONFIG | base64 --decode)
+      ./kubectl --namespace kube-system label --overwrite service kube-dns app.kubernetes.io/managed-by=Helm --kubeconfig <(echo $KUBECONFIG | base64 --decode)
     EOT
   }
 
